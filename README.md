@@ -38,13 +38,22 @@ CLI-Anything: Bridging the Gap Between AI Agents and the World's Software</stron
 
 > Thanks to all invaluable efforts from the community! More updates continuously on the way everyday..
 
-| Date | Update |
-|------|--------|
-| **2026-03-15** | Support for OpenClaw from the Community! Merged Windows cygpath guard to ensure CLI-Anything works reliably in Windows bash environments without cygpath. Community contributions continue to strengthen cross-platform support. |
-| **2026-03-14** | Fixed a GIMP Script-Fu path injection vulnerability and added Japanese README translation. OpenCode version requirements documented alongside several Windows compatibility improvements. |
-| **2026-03-13** | Qodercli plugin officially merged as a community contribution with dedicated setup scripts. Codex skill gained a Windows install script, and placeholder URLs were cleaned up across the project. |
-| **2026-03-12** | Codex skill integration landed, bringing CLI-Anything to yet another AI coding platform. Qodercli support was also introduced, and documentation was updated with limitations and experimental labels. |
-| **2026-03-11** | Zoom video conferencing harness added as the 11th supported application. Multiple community fixes shipped for Shotcut auto-save, LibreOffice Windows/macOS backend, and OpenCode support. |
+- **2026-03-16** 🤖 Added **SKILL.md generation** (Phase 6.5) — every generated CLI now ships with an AI-discoverable skill definition inside the Python package. ReplSkin auto-detects the skill file after `pip install`, and the REPL banner displays the absolute path for agents. Includes `skill_generator.py`, Jinja2 template, `package_data` in all setup.py files, and 51 new tests.
+
+- **2026-03-15** 🐾 Support for **OpenClaw** from the community! Merged Windows `cygpath` guard to ensure CLI-Anything works reliably in Windows bash environments. Community contributions continue to strengthen cross-platform support.
+
+- **2026-03-14** 🔒 Fixed a GIMP Script-Fu path injection vulnerability and added **Japanese README** translation. OpenCode version requirements documented alongside several Windows compatibility improvements.
+
+<details>
+<summary>Earlier news</summary>
+
+- **2026-03-13** 🔌 **Qodercli** plugin officially merged as a community contribution with dedicated setup scripts. Codex skill gained a Windows install script, and placeholder URLs were cleaned up across the project.
+
+- **2026-03-12** 📦 **Codex skill** integration landed, bringing CLI-Anything to yet another AI coding platform. Qodercli support was also introduced, and documentation was updated with limitations and experimental labels.
+
+- **2026-03-11** 📞 **Zoom** video conferencing harness added as the 11th supported application. Multiple community fixes shipped for Shotcut auto-save, LibreOffice Windows/macOS backend, and OpenCode support.
+
+</details>
 
 ---
 
