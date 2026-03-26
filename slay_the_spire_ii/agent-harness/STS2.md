@@ -45,7 +45,7 @@ sends action commands back through the same endpoint.
 
 ### Decision States
 
-The bridge normalizes all game screens into one of 14 decision types:
+The bridge normalizes all game screens into one of 15 decision types:
 
 `menu` · `combat_play` · `hand_select` · `map_select` · `game_over` ·
 `combat_rewards` · `card_reward` · `event_choice` · `rest_site` · `shop` ·

@@ -32,7 +32,9 @@ setup(
         "Programming Language :: Python :: 3.12",
     ],
     python_requires=">=3.10",
-    install_requires=[],
+    install_requires=[
+        "click>=8.0.0",
+    ],
     extras_require={
         "dev": [
             "pytest>=7.0.0",

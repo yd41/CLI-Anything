@@ -18,9 +18,9 @@ This project controls the real running game. It is not a headless simulator and 
 
 - `agent-harness/`
   - The CLI harness package (`cli_anything/slay_the_spire_ii/`), installable via `pip install -e .`.
-- `bridge/plugin/`
+- `agent-harness/bridge/plugin/`
   - `.NET 9` source for the bridge mod. **This mod is required** — the CLI cannot function without it.
-- `bridge/install/`
+- `agent-harness/bridge/install/`
   - Install bundle and scripts for the bridge mod.
 
 **Important:** Unlike other CLI-Anything harnesses that wrap standalone applications, this harness requires a custom bridge mod to be built and installed into the game. The bridge mod exposes the game's internal state via HTTP, which the CLI then consumes.
@@ -37,10 +37,10 @@ The bridge build and install scripts currently auto-detect the default macOS Ste
 
 ### 1. Install the CLI
 
-From the `agent-harness/` directory:
+From the repository root:
 
 ```bash
-cd agent-harness
+cd slay_the_spire_ii/agent-harness
 pip install -e .
 ```
 
@@ -49,14 +49,14 @@ This installs the `cli-anything-sts2` command.
 ### 2. Build the bridge mod
 
 ```bash
-cd bridge/plugin
+cd slay_the_spire_ii/agent-harness/bridge/plugin
 ./build.sh
 ```
 
 The script tries to auto-detect the game data directory and refreshes the local install bundle at:
 
 ```text
-bridge/install/bridge_plugin/
+slay_the_spire_ii/agent-harness/bridge/install/bridge_plugin/
 ```
 
 If auto-detection fails, set `STS2_GAME_DATA_DIR` or pass the directory directly:
@@ -74,7 +74,7 @@ The target directory must contain at least:
 ### 3. Install the bridge mod into the game
 
 ```bash
-cd bridge/install
+cd slay_the_spire_ii/agent-harness/bridge/install
 ./install_bridge.sh
 ```
 
@@ -113,7 +113,7 @@ If `cli-anything-sts2 state` returns JSON, the CLI and the bridge are connected 
 
 1. Build and install `STS2_Bridge`
 2. Launch the real game and enable the mod
-3. Run `pip install -e .` from the `agent-harness/` directory
+3. Run `pip install -e .` from `slay_the_spire_ii/agent-harness`
 4. Run `cli-anything-sts2 state`
 
 ### Start from the main menu
@@ -145,7 +145,7 @@ cli-anything-sts2 claim-reward 0
 cli-anything-sts2 pick-card-reward 0
 cli-anything-sts2 rest 0
 cli-anything-sts2 event 0
-cli-anything-sts2 repl
+cli-anything-sts2
 ```
 
 Common command groups:
@@ -180,7 +180,7 @@ cli-anything-sts2 --base-url http://127.0.0.1:15526 --timeout 20 state
 ### Bridge build
 
 - `STS2_GAME_DATA_DIR`
-  - Use this when `bridge/plugin/build.sh` cannot auto-detect the game data directory
+  - Use this when `slay_the_spire_ii/agent-harness/bridge/plugin/build.sh` cannot auto-detect the game data directory
 
 ## Troubleshooting
 
@@ -192,18 +192,18 @@ This usually means one of the following is still missing:
 - `STS2_Bridge` is not installed or not enabled
 - The local API on `localhost:15526` is not up yet
 
-### `bridge/plugin/build.sh` cannot find the game directory
+### `slay_the_spire_ii/agent-harness/bridge/plugin/build.sh` cannot find the game directory
 
 Confirm that the game is installed, then pass `STS2_GAME_DATA_DIR` explicitly:
 
 ```bash
-STS2_GAME_DATA_DIR="/path/to/data_sts2_macos_arm64" ./bridge/plugin/build.sh
+STS2_GAME_DATA_DIR="/path/to/data_sts2_macos_arm64" ./slay_the_spire_ii/agent-harness/bridge/plugin/build.sh
 ```
 
 ## Related Docs
 
 - [agent-harness/STS2.md](agent-harness/STS2.md)
-- [bridge/plugin/README.md](bridge/plugin/README.md)
+- [agent-harness/bridge/plugin/README.md](agent-harness/bridge/plugin/README.md)
 
 ## Credits
 

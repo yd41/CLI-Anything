@@ -1,194 +1,358 @@
 from __future__ import annotations
 
-import argparse
 import json
 import shlex
 import sys
+from collections.abc import Callable
 
+import click
+
+from . import __version__
 from .core import action_adapter as actions
-from .utils.sts2_backend import ApiError, Sts2RawClient
 from .core.state_adapter import normalize_state
+from .utils.repl_skin import ReplSkin
+from .utils.sts2_backend import ApiError, Sts2RawClient
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="sts2",
-        description="CLI adapter for controlling the real STS2 game via the local bridge plugin.",
-    )
-    parser.add_argument("--base-url", default="http://localhost:15526", help="Local bridge API base URL")
-    parser.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout in seconds")
-
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("raw-state", help="Print the raw bridge-plugin JSON state")
-    sub.add_parser("state", help="Print the normalized CLI-style state")
-    sub.add_parser("continue-game", help="Continue a saved run from the main menu")
-    sub.add_parser("abandon-game", help="Abandon the saved run from the main menu")
-    sub.add_parser("return-to-main-menu", help="Return to the main menu from an active run")
-
-    p = sub.add_parser("start-game", help="Start a new singleplayer run from the main menu")
-    p.add_argument("--character", default="IRONCLAD")
-    p.add_argument("--ascension", type=int, default=0)
-
-    p = sub.add_parser("action", help="Send a raw action by name")
-    p.add_argument("name", help="Raw bridge-plugin action name")
-    p.add_argument("--kv", action="append", default=[], help="Extra payload in key=value form")
-
-    p = sub.add_parser("play-card", help="Play a card by hand index")
-    p.add_argument("card_index", type=int)
-    p.add_argument("--target")
-
-    p = sub.add_parser("use-potion", help="Use a potion by slot index")
-    p.add_argument("slot", type=int)
-    p.add_argument("--target")
-
-    sub.add_parser("end-turn", help="End turn")
-
-    p = sub.add_parser("choose-map", help="Choose a map node by normalized index")
-    p.add_argument("index", type=int)
-
-    p = sub.add_parser("claim-reward", help="Claim a combat reward by index")
-    p.add_argument("index", type=int)
-
-    p = sub.add_parser("pick-card-reward", help="Pick a card reward by index")
-    p.add_argument("index", type=int)
-
-    sub.add_parser("skip-card-reward", help="Skip a card reward")
-    sub.add_parser("proceed", help="Proceed/leave current room when supported")
-
-    p = sub.add_parser("event", help="Choose an event option by index")
-    p.add_argument("index", type=int)
-    sub.add_parser("advance-dialogue", help="Advance ancient event dialogue")
-
-    p = sub.add_parser("rest", help="Choose a rest site option by index")
-    p.add_argument("index", type=int)
-
-    p = sub.add_parser("shop-buy", help="Purchase a shop item by raw item index")
-    p.add_argument("index", type=int)
-
-    p = sub.add_parser("select-card", help="Select a card in an overlay by index")
-    p.add_argument("index", type=int)
-    sub.add_parser("confirm-selection", help="Confirm the current card selection")
-    sub.add_parser("cancel-selection", help="Cancel/skip the current card selection")
-
-    p = sub.add_parser("combat-select-card", help="Select a combat hand card during hand_select")
-    p.add_argument("card_index", type=int)
-    sub.add_parser("combat-confirm-selection", help="Confirm an in-combat card selection")
-
-    p = sub.add_parser("select-relic", help="Select a relic by index")
-    p.add_argument("index", type=int)
-    sub.add_parser("skip-relic-selection", help="Skip relic selection")
-
-    p = sub.add_parser("claim-treasure-relic", help="Claim a treasure room relic by index")
-    p.add_argument("index", type=int)
-
-    sub.add_parser("repl", help="Start an interactive sts2 shell")
-
-    return parser
+class CliRuntime:
+    def __init__(self, base_url: str, timeout: float):
+        self.base_url = base_url
+        self.timeout = timeout
+        self.client = Sts2RawClient(base_url=base_url, timeout=timeout)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    client = Sts2RawClient(base_url=args.base_url, timeout=args.timeout)
+@click.group(invoke_without_command=True)
+@click.option("--base-url", default="http://localhost:15526", show_default=True, help="Local bridge API base URL")
+@click.option("--timeout", type=float, default=10.0, show_default=True, help="HTTP timeout in seconds")
+@click.pass_context
+def cli(ctx: click.Context, base_url: str, timeout: float) -> None:
+    """CLI adapter for controlling the real STS2 game via the local bridge plugin.
 
+    Run without a subcommand to enter interactive REPL mode.
+    """
+    ctx.obj = CliRuntime(base_url=base_url, timeout=timeout)
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(repl)
+
+
+def _get_runtime(ctx: click.Context) -> CliRuntime:
+    runtime = ctx.obj
+    if not isinstance(runtime, CliRuntime):
+        raise RuntimeError("CLI runtime not initialized")
+    return runtime
+
+
+def _run_json(command: Callable[[], object]) -> None:
     try:
-        if args.command == "raw-state":
-            return _print_json(client.get_state(format="json"))
-
-        if args.command == "state":
-            raw = client.get_state(format="json")
-            return _print_json(normalize_state(raw))
-
-        if args.command == "continue-game":
-            return _post_payload(client, actions.continue_game())
-
-        if args.command == "abandon-game":
-            return _post_payload(client, actions.abandon_game())
-
-        if args.command == "return-to-main-menu":
-            return _post_payload(client, actions.return_to_main_menu())
-
-        if args.command == "start-game":
-            return _post_payload(client, actions.start_new_game(args.character, args.ascension))
-
-        if args.command == "action":
-            payload = _parse_kv_pairs(args.kv)
-            return _print_json(client.post_action(args.name, **payload))
-
-        if args.command == "play-card":
-            return _post_payload(client, actions.play_card(args.card_index, target=args.target))
-
-        if args.command == "use-potion":
-            return _post_payload(client, actions.use_potion(args.slot, target=args.target))
-
-        if args.command == "end-turn":
-            return _post_payload(client, actions.end_turn())
-
-        if args.command == "choose-map":
-            return _post_payload(client, actions.choose_map_node(args.index))
-
-        if args.command == "claim-reward":
-            return _post_payload(client, actions.claim_reward(args.index))
-
-        if args.command == "pick-card-reward":
-            return _post_payload(client, actions.select_card_reward(args.index))
-
-        if args.command == "skip-card-reward":
-            return _post_payload(client, actions.skip_card_reward())
-
-        if args.command == "proceed":
-            return _post_payload(client, actions.proceed())
-
-        if args.command == "event":
-            return _post_payload(client, actions.choose_event_option(args.index))
-
-        if args.command == "advance-dialogue":
-            return _post_payload(client, actions.advance_dialogue())
-
-        if args.command == "rest":
-            return _post_payload(client, actions.choose_rest_option(args.index))
-
-        if args.command == "shop-buy":
-            return _post_payload(client, actions.shop_purchase(args.index))
-
-        if args.command == "select-card":
-            return _post_payload(client, actions.select_card(args.index))
-
-        if args.command == "confirm-selection":
-            return _post_payload(client, actions.confirm_selection())
-
-        if args.command == "cancel-selection":
-            return _post_payload(client, actions.cancel_selection())
-
-        if args.command == "combat-select-card":
-            return _post_payload(client, actions.combat_select_card(args.card_index))
-
-        if args.command == "combat-confirm-selection":
-            return _post_payload(client, actions.combat_confirm_selection())
-
-        if args.command == "select-relic":
-            return _post_payload(client, actions.select_relic(args.index))
-
-        if args.command == "skip-relic-selection":
-            return _post_payload(client, actions.skip_relic_selection())
-
-        if args.command == "claim-treasure-relic":
-            return _post_payload(client, actions.claim_treasure_relic(args.index))
-
-        if args.command == "repl":
-            return _run_repl(args.base_url, args.timeout)
-
-        parser.error(f"Unhandled command: {args.command}")
-        return 2
+        _print_json(command())
     except (ApiError, RuntimeError, ValueError) as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+        raise click.ClickException(str(exc)) from exc
 
 
-def _post_payload(client: Sts2RawClient, payload: dict[str, object]) -> int:
+def _run_post(client: Sts2RawClient, payload: dict[str, object]) -> None:
     action = str(payload.pop("action"))
-    return _print_json(client.post_action(action, **payload))
+    _run_json(lambda: client.post_action(action, **payload))
+
+
+@cli.command("raw-state")
+@click.pass_context
+def raw_state(ctx: click.Context) -> None:
+    """Print the raw bridge-plugin JSON state."""
+    runtime = _get_runtime(ctx)
+    _run_json(lambda: runtime.client.get_state(format="json"))
+
+
+@cli.command("state")
+@click.pass_context
+def state(ctx: click.Context) -> None:
+    """Print the normalized CLI-style state."""
+    runtime = _get_runtime(ctx)
+    _run_json(lambda: normalize_state(runtime.client.get_state(format="json")))
+
+
+@cli.command("continue-game")
+@click.pass_context
+def continue_game(ctx: click.Context) -> None:
+    """Continue a saved run from the main menu."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.continue_game())
+
+
+@cli.command("abandon-game")
+@click.pass_context
+def abandon_game(ctx: click.Context) -> None:
+    """Abandon the saved run from the main menu."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.abandon_game())
+
+
+@cli.command("return-to-main-menu")
+@click.pass_context
+def return_to_main_menu(ctx: click.Context) -> None:
+    """Return to the main menu from an active run."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.return_to_main_menu())
+
+
+@cli.command("start-game")
+@click.option("--character", default="IRONCLAD", show_default=True)
+@click.option("--ascension", type=int, default=0, show_default=True)
+@click.pass_context
+def start_game(ctx: click.Context, character: str, ascension: int) -> None:
+    """Start a new singleplayer run from the main menu."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.start_new_game(character, ascension))
+
+
+@cli.command("action")
+@click.argument("name")
+@click.option("--kv", multiple=True, help="Extra payload in key=value form")
+@click.pass_context
+def action(ctx: click.Context, name: str, kv: tuple[str, ...]) -> None:
+    """Send a raw action by name."""
+    runtime = _get_runtime(ctx)
+    _run_json(lambda: runtime.client.post_action(name, **_parse_kv_pairs(list(kv))))
+
+
+@cli.command("play-card")
+@click.argument("card_index", type=int)
+@click.option("--target")
+@click.pass_context
+def play_card(ctx: click.Context, card_index: int, target: str | None) -> None:
+    """Play a card by hand index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.play_card(card_index, target=target))
+
+
+@cli.command("use-potion")
+@click.argument("slot", type=int)
+@click.option("--target")
+@click.pass_context
+def use_potion(ctx: click.Context, slot: int, target: str | None) -> None:
+    """Use a potion by slot index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.use_potion(slot, target=target))
+
+
+@cli.command("end-turn")
+@click.pass_context
+def end_turn(ctx: click.Context) -> None:
+    """End turn."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.end_turn())
+
+
+@cli.command("choose-map")
+@click.argument("index", type=int)
+@click.pass_context
+def choose_map(ctx: click.Context, index: int) -> None:
+    """Choose a map node by normalized index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.choose_map_node(index))
+
+
+@cli.command("claim-reward")
+@click.argument("index", type=int)
+@click.pass_context
+def claim_reward(ctx: click.Context, index: int) -> None:
+    """Claim a combat reward by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.claim_reward(index))
+
+
+@cli.command("pick-card-reward")
+@click.argument("index", type=int)
+@click.pass_context
+def pick_card_reward(ctx: click.Context, index: int) -> None:
+    """Pick a card reward by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.select_card_reward(index))
+
+
+@cli.command("skip-card-reward")
+@click.pass_context
+def skip_card_reward(ctx: click.Context) -> None:
+    """Skip a card reward."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.skip_card_reward())
+
+
+@cli.command("proceed")
+@click.pass_context
+def proceed(ctx: click.Context) -> None:
+    """Proceed/leave current room when supported."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.proceed())
+
+
+@cli.command("event")
+@click.argument("index", type=int)
+@click.pass_context
+def event(ctx: click.Context, index: int) -> None:
+    """Choose an event option by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.choose_event_option(index))
+
+
+@cli.command("advance-dialogue")
+@click.pass_context
+def advance_dialogue(ctx: click.Context) -> None:
+    """Advance ancient event dialogue."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.advance_dialogue())
+
+
+@cli.command("rest")
+@click.argument("index", type=int)
+@click.pass_context
+def rest(ctx: click.Context, index: int) -> None:
+    """Choose a rest site option by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.choose_rest_option(index))
+
+
+@cli.command("shop-buy")
+@click.argument("index", type=int)
+@click.pass_context
+def shop_buy(ctx: click.Context, index: int) -> None:
+    """Purchase a shop item by raw item index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.shop_purchase(index))
+
+
+@cli.command("select-card")
+@click.argument("index", type=int)
+@click.pass_context
+def select_card(ctx: click.Context, index: int) -> None:
+    """Select a card in an overlay by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.select_card(index))
+
+
+@cli.command("confirm-selection")
+@click.pass_context
+def confirm_selection(ctx: click.Context) -> None:
+    """Confirm the current card selection."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.confirm_selection())
+
+
+@cli.command("cancel-selection")
+@click.pass_context
+def cancel_selection(ctx: click.Context) -> None:
+    """Cancel/skip the current card selection."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.cancel_selection())
+
+
+@cli.command("combat-select-card")
+@click.argument("card_index", type=int)
+@click.pass_context
+def combat_select_card(ctx: click.Context, card_index: int) -> None:
+    """Select a combat hand card during hand_select."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.combat_select_card(card_index))
+
+
+@cli.command("combat-confirm-selection")
+@click.pass_context
+def combat_confirm_selection(ctx: click.Context) -> None:
+    """Confirm an in-combat card selection."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.combat_confirm_selection())
+
+
+@cli.command("select-relic")
+@click.argument("index", type=int)
+@click.pass_context
+def select_relic(ctx: click.Context, index: int) -> None:
+    """Select a relic by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.select_relic(index))
+
+
+@cli.command("skip-relic-selection")
+@click.pass_context
+def skip_relic_selection(ctx: click.Context) -> None:
+    """Skip relic selection."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.skip_relic_selection())
+
+
+@cli.command("claim-treasure-relic")
+@click.argument("index", type=int)
+@click.pass_context
+def claim_treasure_relic(ctx: click.Context, index: int) -> None:
+    """Claim a treasure room relic by index."""
+    runtime = _get_runtime(ctx)
+    _run_post(runtime.client, actions.claim_treasure_relic(index))
+
+
+@cli.command()
+@click.pass_context
+def repl(ctx: click.Context) -> None:
+    """Start an interactive sts2 shell."""
+    runtime = _get_runtime(ctx)
+    skin = ReplSkin("slay_the_spire_ii", version=__version__)
+    skin.print_banner()
+    skin.hint("Type a command such as `state` or `play-card 0 --target NIBBIT_0`.")
+    skin.hint("Type `help` to show shortcuts. Type `quit` or `exit` to leave.")
+    print()
+
+    pt_session = skin.create_prompt_session()
+
+    while True:
+        try:
+            line = skin.get_input(pt_session, context=runtime.base_url)
+        except (EOFError, KeyboardInterrupt):
+            skin.print_goodbye()
+            return
+
+        if not line:
+            continue
+
+        lowered = line.lower()
+        if lowered in {"quit", "exit"}:
+            skin.print_goodbye()
+            return
+        if lowered == "help":
+            skin.help(_repl_commands())
+            continue
+
+        try:
+            argv = shlex.split(line)
+        except ValueError as exc:
+            skin.warning(str(exc))
+            continue
+
+        if argv and argv[0] == "repl":
+            skin.warning("Already in REPL. Run a command directly instead.")
+            continue
+
+        try:
+            cli.main(
+                args=["--base-url", runtime.base_url, "--timeout", str(runtime.timeout), *argv],
+                prog_name="cli-anything-sts2",
+                standalone_mode=False,
+            )
+        except click.ClickException as exc:
+            skin.error(exc.format_message())
+        except click.exceptions.Exit as exc:
+            if exc.exit_code not in (None, 0):
+                skin.error(f"Command exited with status {exc.exit_code}")
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+            if code not in (None, 0):
+                skin.error(f"Command exited with status {code}")
+        except Exception as exc:
+            skin.error(str(exc))
+
+
+def _repl_commands() -> dict[str, str]:
+    commands = {name: cmd.short_help or "" for name, cmd in cli.commands.items() if name != "repl"}
+    commands["help"] = "Show this help"
+    commands["quit"] = "Exit REPL"
+    return commands
 
 
 def _parse_kv_pairs(entries: list[str]) -> dict[str, object]:
@@ -211,39 +375,23 @@ def _coerce_value(raw: str) -> object:
     return raw
 
 
-def _print_json(value: object) -> int:
+def _print_json(value: object) -> None:
     json.dump(value, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
-    return 0
 
 
-def _run_repl(base_url: str, timeout: float) -> int:
-    print("STS2CLI REPL")
-    print("Type a normal subcommand such as `state` or `play-card 0 --target NIBBIT_0`.")
-    print("Type `help` to show command help. Type `exit` or `quit` to leave.")
-
-    while True:
-        try:
-            line = input("sts2> ").strip()
-        except EOFError:
-            sys.stdout.write("\n")
-            return 0
-        except KeyboardInterrupt:
-            sys.stdout.write("\n")
-            return 0
-
-        if not line:
-            continue
-        if line in {"exit", "quit"}:
-            return 0
-        if line == "help":
-            build_parser().print_help()
-            continue
-
-        argv = ["--base-url", base_url, "--timeout", str(timeout), *shlex.split(line)]
-        code = main(argv)
-        if code != 0:
-            print(f"[exit {code}]", file=sys.stderr)
+def main(argv: list[str] | None = None) -> int:
+    try:
+        cli.main(args=argv, prog_name="cli-anything-sts2", standalone_mode=False)
+        return 0
+    except click.ClickException as exc:
+        exc.show(file=sys.stderr)
+        return exc.exit_code
+    except click.exceptions.Exit as exc:
+        return exc.exit_code
+    except click.Abort:
+        click.echo("Aborted!", err=True)
+        return 1
 
 
 if __name__ == "__main__":

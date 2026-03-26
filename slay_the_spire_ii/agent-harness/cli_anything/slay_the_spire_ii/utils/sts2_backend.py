@@ -28,7 +28,9 @@ class Sts2RawClient:
         return self._request_json("GET", url) if format == "json" else self._request_text("GET", url)
 
     def post_action(self, action: str, **payload: Any) -> JsonDict:
-        body: JsonDict = {"action": action, **payload}
+        if "action" in payload:
+            raise ValueError("`action` must be provided as the first argument to post_action, not in **payload")
+        body: JsonDict = {**payload, "action": action}
         return self._request_json("POST", self.singleplayer_url, body)
 
     def _request_text(self, method: str, url: str, body: JsonDict | None = None) -> str:

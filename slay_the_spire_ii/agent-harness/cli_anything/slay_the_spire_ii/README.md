@@ -25,8 +25,8 @@ pip install cli-anything-slay-the-spire-ii
 # Show help
 cli-anything-sts2 --help
 
-# Start interactive REPL mode
-cli-anything-sts2 repl
+# Start interactive REPL mode (default)
+cli-anything-sts2
 
 # Read normalized game state
 cli-anything-sts2 state
@@ -37,14 +37,15 @@ cli-anything-sts2 raw-state
 
 ### REPL Mode
 
-When invoked with the `repl` subcommand, the CLI enters an interactive session:
+Run `cli-anything-sts2` with no subcommand to enter the interactive REPL. The
+explicit `repl` subcommand still works too:
 
 ```bash
-cli-anything-sts2 repl
+cli-anything-sts2
 # Enter commands interactively:
-# sts2> state
-# sts2> play-card 0 --target jaw_worm_0
-# sts2> end-turn
+# > slay_the_spire_ii [http://localhost:15526] ❯ state
+# > slay_the_spire_ii [http://localhost:15526] ❯ play-card 0 --target jaw_worm_0
+# > slay_the_spire_ii [http://localhost:15526] ❯ end-turn
 ```
 
 ## Command Groups
@@ -150,11 +151,11 @@ cli-anything-sts2 rest 0                         # Rest at campfire
 ### Interactive REPL Session
 
 ```bash
-cli-anything-sts2 repl
-# sts2> state
-# sts2> play-card 2
-# sts2> end-turn
-# sts2> exit
+cli-anything-sts2
+# > slay_the_spire_ii [http://localhost:15526] ❯ state
+# > slay_the_spire_ii [http://localhost:15526] ❯ play-card 2
+# > slay_the_spire_ii [http://localhost:15526] ❯ end-turn
+# > slay_the_spire_ii [http://localhost:15526] ❯ exit
 ```
 
 ## Configuration
@@ -170,7 +171,7 @@ cli-anything-sts2 repl
 cli_anything/slay_the_spire_ii/
 ├── __init__.py
 ├── __main__.py                  # python3 -m cli_anything.slay_the_spire_ii
-├── slay_the_spire_ii_cli.py     # CLI entry point (argparse + REPL)
+├── slay_the_spire_ii_cli.py     # CLI entry point (Click + default REPL)
 ├── core/
 │   ├── __init__.py
 │   ├── action_adapter.py        # Action payload factories

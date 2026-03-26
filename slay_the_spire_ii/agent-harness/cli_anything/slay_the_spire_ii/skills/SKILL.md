@@ -35,7 +35,7 @@ the game directory. Full instructions are in the repository README, but the
 short version is:
 
 ```bash
-cd CLI-Anything/slay_the_spire_ii/bridge/plugin
+cd CLI-Anything/slay_the_spire_ii/agent-harness/bridge/plugin
 ./build.sh
 cd ../install
 ./install_bridge.sh
@@ -72,8 +72,8 @@ If this returns JSON, the CLI and bridge are connected.
 # Read normalized game state (always start here)
 cli-anything-sts2 state
 
-# Start interactive REPL mode
-cli-anything-sts2 repl
+# Start interactive REPL mode (default)
+cli-anything-sts2
 
 # Show all available commands
 cli-anything-sts2 --help
